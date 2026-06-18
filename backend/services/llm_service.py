@@ -31,5 +31,6 @@ async def generate_readme(prompt: str, model: str = "meta-llama/llama-4-scout-17
             max_tokens=2000,
         )
         return response.choices[0].message.content.strip()
+    
     except Exception as e:
         raise RuntimeError(f"Failed to generate Readme: {str(e)}")
