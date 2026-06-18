@@ -5,9 +5,10 @@ from pathlib import Path
 from git import Repo
 from groq import AsyncGroq
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, List
 
 from services.llm_service import client, MODEL
+from services.prompt_builder import build_readme_prompt
 
 KEY_FILES = [
 
@@ -26,11 +27,11 @@ KEY_FILES = [
     "Gemfile", "Gemfile.lock", "config/routes.rb",
     "composer.json", "composer.lock", "artisan",
     "Program.cs", "Startup.cs", "*.csproj"
-    
+
 ]
 
 
-async def repo_parse(repo_url: str, prompt: Optional[str] = None) -> str:
+async def repo_parse(repo_url: str, prompt: Optional[str] = None, selected_sections: Optional[List[str]] = None) -> str:
     temp_dir = None
     try:
         temp_dir = tempfile.mkdtemp(prefix="repo_")
@@ -93,21 +94,47 @@ async def repo_parse(repo_url: str, prompt: Optional[str] = None) -> str:
             )
 
 
-            response = await client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert technical writer. Generate high-quality, professional README content."
-                },
-                {
-                    "role": "user",
-                    "content": f"{full_context}\n\n{user_prompt}"
-                }
-            ],
-            temperature=0.7,
-            max_tokens=2000,
+            # response = await client.chat.completions.create(
+            # model=MODEL,
+            # messages=[
+            #     {
+            #         "role": "system",
+            #         "content": "You are an expert technical writer. Generate high-quality, professional README content."
+            #     },
+            #     {
+            #         "role": "user",
+            #         "content": f"{full_context}\n\n{user_prompt}"
+            #     }
+            # ],
+            # temperature=0.7,
+            # max_tokens=2000,
+            # )
+
+
+            final_prompt = build_readme_prompt(
+                repo_context=full_context,
+                selected_sections=["Features", "Installation", "Usage", "Tech Stack", "Contributing"],
+                custom_instructions="Target audience is Python developers.",
+                project_purpose="A fast and modern web framework."
             )
+
+
+            response = await client.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert technical writer specializing in modern, clean, and professional READMEs."
+                    },
+                    {
+                        "role": "user",
+                        "content": final_prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2500,
+            )
+
 
             return response.choices[0].message.content.strip()
         
