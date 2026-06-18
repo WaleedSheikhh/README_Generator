@@ -7,8 +7,8 @@ from groq import AsyncGroq
 from dotenv import load_dotenv
 from typing import Optional, List
 
-from services.llm_service import client, MODEL
-from services.prompt_builder import build_readme_prompt
+from .llm_service import client, MODEL
+from .prompt_builder import build_readme_prompt
 
 KEY_FILES = [
 
@@ -31,17 +31,31 @@ KEY_FILES = [
 ]
 
 
-async def repo_parse(repo_url: str, prompt: Optional[str] = None, selected_sections: Optional[List[str]] = None) -> str:
+async def repo_parse(
+    repo_url: Optional[str] = None,
+    local_path: Optional[str] = None,
+    prompt: Optional[str] = None,
+    selected_sections: Optional[List[str]] = None
+) -> str:
+    
+    if not repo_url and not local_path:
+        raise ValueError("Either repo_url or local_path must be provided.")
+
     temp_dir = None
     try:
-        temp_dir = tempfile.mkdtemp(prefix="repo_")
-        print(f"Cloning the Repo {repo_url}")
+        if repo_url:
+            temp_dir = tempfile.mkdtemp(prefix="repo_")
+            print(f"Cloning the Repo {repo_url}")
+            Repo.clone_from(repo_url, temp_dir)
+            working_dir = temp_dir
+        else:
+            working_dir = local_path
+            print(f"Using local path: {working_dir}")
 
-        Repo.clone_from(repo_url, temp_dir)
-
-        structure= []
-        for root, dirs, files in os.walk(temp_dir):
-            level = root.replace(temp_dir, "").count(os.sep)
+        # Build directory structure
+        structure = []
+        for root, dirs, files in os.walk(working_dir):
+            level = root.replace(working_dir, "").count(os.sep)
             indent = "    " * level
             structure.append(f"{indent}{os.path.basename(root)}/")
             sub_indent = "    " * (level + 1)
@@ -50,10 +64,11 @@ async def repo_parse(repo_url: str, prompt: Optional[str] = None, selected_secti
 
         structure_str = "\n".join(structure[:200])
 
+        # Read key files
         content_summary = []
         for key_file in KEY_FILES:
             file_path = None
-            for root, _, files in os.walk(temp_dir):
+            for root, _, files in os.walk(working_dir):
                 if key_file in files:
                     file_path = os.path.join(root, key_file)
                     break
@@ -66,78 +81,65 @@ async def repo_parse(repo_url: str, prompt: Optional[str] = None, selected_secti
                 except Exception:
                     content_summary.append(f"\n--- {key_file} ---\n[Error reading file]")
 
-            extensions = set()
-            for root, _, files in os.walk(temp_dir):
-                for file in files:
-                    ext = Path(file).suffix.lower()
-                    if ext:
-                        extensions.add(ext)
-            languages = ", ".join(sorted(extensions)) if extensions else "Unknown"
-
-            
-            
-            full_context = f"""
-            Repository URL: {repo_url}
-            Detected Languages: {languages}
-
-            Directory Structure:
-            {structure_str}
-
-            Key Files Content:
-            {"".join(content_summary)}
-            """
-
-            user_prompt = prompt or (
-                "Write a professional, modern, and engaging README.md for this project. "
-                "Include sections such as: Features, Installation, Usage, Tech Stack, "
-                "Contributing, and License."
-            )
+        project_name = "Unknown"
+        for root, _, files in os.walk(working_dir):
+            if "pyproject.toml" in files:
+                with open(os.path.join(root, "pyproject.toml")) as f:
+                    for line in f:
+                        if line.startswith("name"):
+                            project_name = line.split("=")[1].strip().strip('"')
+                            break
+            if "package.json" in files:
+                import json
+                with open(os.path.join(root, "package.json")) as f:
+                    data = json.load(f)
+                    project_name = data.get("name", project_name)
 
 
-            # response = await client.chat.completions.create(
-            # model=MODEL,
-            # messages=[
-            #     {
-            #         "role": "system",
-            #         "content": "You are an expert technical writer. Generate high-quality, professional README content."
-            #     },
-            #     {
-            #         "role": "user",
-            #         "content": f"{full_context}\n\n{user_prompt}"
-            #     }
-            # ],
-            # temperature=0.7,
-            # max_tokens=2000,
-            # )
+        extensions = set()
+        for root, _, files in os.walk(working_dir):
+            for file in files:
+                ext = Path(file).suffix.lower()
+                if ext:
+                    extensions.add(ext)
+        languages = ", ".join(sorted(extensions)) if extensions else "Unknown"
 
 
-            final_prompt = build_readme_prompt(
-                repo_context=full_context,
-                selected_sections=["Features", "Installation", "Usage", "Tech Stack", "Contributing"],
-                custom_instructions="Target audience is Python developers.",
-                project_purpose="A fast and modern web framework."
-            )
+        full_context = f"""
+Repository URL: {repo_url or "Uploaded ZIP"}
+Detected Languages: {languages}
 
+Directory Structure:
+{structure_str}
 
-            response = await client.chat.completions.create(
-                model=MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert technical writer specializing in modern, clean, and professional READMEs."
-                    },
-                    {
-                        "role": "user",
-                        "content": final_prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2500,
-            )
+Key Files Content:
+{"".join(content_summary)}
+"""
 
+        final_prompt = build_readme_prompt(
+            repo_context=full_context,
+            selected_sections=selected_sections,
+            custom_instructions=prompt,
+            project_purpose=None
+        )
 
-            return response.choices[0].message.content.strip()
-        
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert technical writer who creates modern, original README files. Never copy content verbatim from existing README files. Never include full license text — only mention the license name. Always use the actual repository name and real details found in the code." 
+                },
+                {
+                    "role": "user",
+                    "content": final_prompt
+                }
+            ],
+            temperature=0.7,
+            max_tokens=4000,
+        )
+
+        return response.choices[0].message.content.strip()
 
     except Exception as e:
         error = str(e).lower()
@@ -147,8 +149,8 @@ async def repo_parse(repo_url: str, prompt: Optional[str] = None, selected_secti
             raise ValueError("Private repositories are not supported yet.")
         else:
             raise RuntimeError(f"Failed to process repository: {str(e)}")
-        
+
     finally:
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
-            print("Temporary files cleaned up.")
+            print("Temporary files cleaned up.")    

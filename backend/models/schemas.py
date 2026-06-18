@@ -24,7 +24,7 @@ class RepoReadmeRequest(BaseModel):
     model_name: Optional[str] = Field(
         default=None,
         description="Groq model to use (optional)",
-        example="llama-3.1-8b-instant"
+        example="meta-llama/llama-4-scout-17b-16e-instruct"
     )
 
 
@@ -34,7 +34,7 @@ class config():
             "repo_url": "https://github.com/tiangolo/fastapi",
             "selected_sections": ["Features", "Installation", "Usage", "Tech Stack"],
             "prompt": "Target intermediate Python developers.",
-            "model_name": "llama-3.1-8b-instant"
+            "model_name": "meta-llama/llama-4-scout-17b-16e-instruct"
         }
     }
 
@@ -44,7 +44,7 @@ class RepoReadmeResponse(BaseModel):
     """
     markdown: str = Field(..., description="The generated README content in Markdown")
     
-    model_used: str = Field(..., description="The Groq model that was used")
+    model_used: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     
     tokens_used: Optional[int] = Field(
         None, 

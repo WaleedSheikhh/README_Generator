@@ -47,6 +47,13 @@ def build_readme_prompt(
             - Make it visually appealing with proper Markdown (badges, code blocks, tables, emojis where appropriate).
             - Be concise but informative.
             - Highlight what makes this project unique.
+
+            ### Rules:
+            - Never reproduce the full license text, only state the license name and year
+            - Do not use filler phrases like "innovative", "robust", "seamless"
+            - If the repo URL is unknown, do not guess it — write [your-repo-url] as placeholder
+            - Keep descriptions specific to what the code actually does
+            - Do not invent features that are not found in the code
             """
     
     if project_purpose:

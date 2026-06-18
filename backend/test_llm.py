@@ -9,7 +9,7 @@ def test_repo_readme_request_valid():
         "repo_url": "https://github.com/tiangolo/fastapi",
         "selected_sections": ["Features", "Installation", "Usage"],
         "prompt": "Make it beginner-friendly",
-        "model_name": "llama-3.1-8b-instant"
+        "model_name": "meta-llama/llama-4-scout-17b-16e-instruct"
     }
     
     request = RepoReadmeRequest(**data)
@@ -36,7 +36,7 @@ def test_repo_readme_response():
     """Test response model"""
     response = RepoReadmeResponse(
         markdown="# Awesome Project\n\nThis is a test README.",
-        model_used="llama-3.1-8b-instant",
+        model_used="meta-llama/llama-4-scout-17b-16e-instruct",
         tokens_used=1247,
         status="success"
     )
